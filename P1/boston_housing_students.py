@@ -194,7 +194,7 @@ def fit_predict_model(city_data):
     reg = GridSearchCV(
         estimator=regressor,
         param_grid=parameters,
-        scoring=make_scorer(mean_absolute_error))
+        scoring=make_scorer(mean_absolute_error, greater_is_better=False))
 
     # Fit the learner to the training data
     print("Final Model: ")
