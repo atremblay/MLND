@@ -199,6 +199,8 @@ def fit_predict_model(city_data):
     # Fit the learner to the training data
     print("Final Model: ")
     print(reg.fit(X, y))
+    print("Best params: {}".format(reg.best_params_))
+    print("Best estimator: {}".format(reg.best_estimator_))
 
     # Use the model to predict the output of a particular sample
     x = [
