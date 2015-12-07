@@ -1,0 +1,3 @@
+[submodule "ud120-projects"]
+	path = ud120-projects
+	url = git@github.com:udacity/ud120-projects.git
