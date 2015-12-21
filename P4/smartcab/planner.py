@@ -11,6 +11,10 @@ class RoutePlanner(object):
         print "RoutePlanner.route_to(): destination = {}".format(destination)  # [debug]
 
     def next_waypoint(self):
+        """
+        Return a valid action (see Environment.valid_actions) in the direction of our
+        destination
+        """
         location = self.env.agent_states[self.agent]['location']
         heading = self.env.agent_states[self.agent]['heading']
         delta = (self.destination[0] - location[0], self.destination[1] - location[1])

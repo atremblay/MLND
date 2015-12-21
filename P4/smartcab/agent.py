@@ -11,6 +11,10 @@ class LearningAgent(Agent):
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
+        # Will need a policy state to action
+        def action_factory():
+            random.choice(Environment.valid_states[1:])
+        self.policy = dict(action_factory)
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
@@ -23,7 +27,7 @@ class LearningAgent(Agent):
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
-        
+
         # TODO: Select action according to your policy
         action = None
 
