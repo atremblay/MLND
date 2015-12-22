@@ -1,3 +1,6 @@
+import random
+
+
 class RoutePlanner(object):
     """Silly route planner that is meant for a perpendicular grid network."""
 

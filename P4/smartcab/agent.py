@@ -2,6 +2,29 @@ import random
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
+from collections import defaultdict
+
+
+class State(object):
+    """docstring for State"""
+    def __init__(self, next_waypoint, light, oncoming, left, right):
+        super(State, self).__init__()
+        self.next_waypoint = next_waypoint
+        self.light = light
+        self.oncoming = oncoming
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        string = "State: next_waypoint = {}, light = {}, oncoming = {}, left = {}, right = {}"
+        string = string.format(
+            self.next_waypoint,
+            self.light,
+            self.oncoming,
+            self.left,
+            self.right)
+        return string
+
 
 class LearningAgent(Agent):
     """An agent that learns to drive in the smartcab world."""
@@ -12,9 +35,10 @@ class LearningAgent(Agent):
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
         # Will need a policy state to action
+
         def action_factory():
-            random.choice(Environment.valid_states[1:])
-        self.policy = dict(action_factory)
+            return random.choice(Environment.valid_actions)
+        self.policy = defaultdict(action_factory)
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
@@ -27,9 +51,11 @@ class LearningAgent(Agent):
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
+        state = State(self.next_waypoint, **inputs)
+        print state
 
         # TODO: Select action according to your policy
-        action = None
+        action = self.policy[state]
 
         # Execute action and get reward
         reward = self.env.act(self, action)
