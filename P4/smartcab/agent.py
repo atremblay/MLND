@@ -5,6 +5,29 @@ from simulator import Simulator
 from collections import defaultdict
 
 
+class QState(object):
+    """
+    Q table for a specific state. It contains the value of every action
+    for a state. This is a standalone object to manage the values of one
+    single state.
+    """
+    def __init__(self, state):
+        super(QState, self).__init__()
+        self.state = state
+        self.action = {action:0 for action in Environment.valid_actions}
+
+    def __iter__(self):
+        # Iterating over Environment.valid_actions just to keep order
+        for action in Environment.valid_actions:
+            yield self.action[action]
+
+    def __getitem__(self, action):
+        return self.action[action]
+
+    def __setitem__(self, key, value):
+        self.action[key] = value
+
+
 class State(object):
     """docstring for State"""
     def __init__(self, next_waypoint, light, oncoming, left, right):
