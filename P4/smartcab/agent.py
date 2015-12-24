@@ -1,11 +1,9 @@
-import numpy as np
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
 import random
-import pdb
 import math
-from collections import Counter
+
 
 class QTable(object):
     """docstring for QTable"""
@@ -53,15 +51,6 @@ class QState(object):
         self.actions[action].value = value
 
     def __repr__(self):
-        # pdb.set_trace()
-        # string = "QState: next_waypoint = {}, light = {}, oncoming = {}, left = {}, right = {}"
-        # string = string.format(
-        #     self.state.next_waypoint,
-        #     self.state.light,
-        #     self.state.oncoming,
-        #     self.state.left,
-        #     self.state.right)
-
         string = "Q{}".format(self.state)
         for action in self.actions:
             string += "\n\t" + repr(self.actions[action])
@@ -137,30 +126,17 @@ class LearningAgent(Agent):
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
         # TODO: Initialize any additional variables here
         self.gamma = 0.8
-
-        # def action_factory():
-        #     return random.choice(Environment.valid_actions)
-        # self.policy = defaultdict(action_factory)
         self.qtable = QTable()
-        self.ratio = list()
-        self.count = Counter()
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
-        if self.count["GOOD"] == 0 and self.count["WRONG"] == 0:
-            return
-        self.ratio.append(float(self.count["WRONG"])/(self.count["GOOD"]+self.count["WRONG"]))
-        print(self.ratio)
-        self.count = Counter()
 
     def update(self, t):
         # Gather inputs
         self.next_waypoint = self.planner.next_waypoint()  # from route planner, also displayed by simulator
         inputs = self.env.sense(self)
-
         deadline = self.env.get_deadline(self)
-        # pdb.set_trace()
 
         # TODO: Update state
         state = State(self.next_waypoint, deadline=deadline, **inputs)
@@ -169,32 +145,17 @@ class LearningAgent(Agent):
 
         # TODO: Select action according to your policy
         #  Boltzmann exploration
-
         T = .75
         num = math.exp(max(qstate).value/T)
         denom = sum([math.exp(action.value/T) for action in qstate])
         pr_a_s = num/denom
-        print("======================================")
-        print("Probability of being greedy: {}".format(pr_a_s))
-        print(qstate)
         if random.random() > pr_a_s:
             action = qstate.random()
-            print("Exploration")
-            # self.count["Exploration"] += 1
         else:
             action = max(qstate)
-            # self.count["Exploitation"] += 1
-            print("Exploitation")
-
 
         # Execute action and get reward
         reward = self.env.act(self, action.action)
-        if reward != -1:
-            print("GOOD ACTION")
-            self.count["GOOD"] += 1
-        else:
-            print("WRONG ACTION")
-            self.count["WRONG"] += 1
 
         # TODO: Learn policy based on state, action, reward
         state_prime = State(
@@ -208,9 +169,7 @@ class LearningAgent(Agent):
         qsa = action.value
         qsa_prime = max(qstate_prime).value  # Return the highest value of all actions
 
-        #Q[s,a] <- Q[s,a] + \alpha*(R(s,a)+ \gamma*max_a' Q[s',a'] - Q[s,a])
         # Q[s,a]<-(1-alpha) Q[s,a] + alpha(r+ gamma*max_a' Q[s',a']).
-        # self.qtable[state][action.action] = qsa + self.alpha * (reward + self.gamma*qsa_prime - qsa)
         alpha = 1./(t+1)
         self.qtable[state][action.action] = (1-alpha)*qsa + alpha*(reward + self.gamma*qsa_prime)
         print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
@@ -225,8 +184,8 @@ def run():
     e.set_primary_agent(a, enforce_deadline=True)  # set agent to track
 
     # Now simulate it
-    sim = Simulator(e, update_delay=0.00001)  # reduce update_delay to speed up simulation
-    sim.run(n_trials=1001)  # press Esc or close pygame window to quit
+    sim = Simulator(e, update_delay=0.0001)  # reduce update_delay to speed up simulation
+    sim.run(n_trials=100)  # press Esc or close pygame window to quit
 
 
 if __name__ == '__main__':
