@@ -3,7 +3,7 @@
 # @Author: alexis
 # @Date:   2016-01-03 14:04:55
 # @Last Modified by:   alexis
-# @Last Modified time: 2016-01-10 13:47:53
+# @Last Modified time: 2016-01-10 17:56:29
 
 import pandas as pd
 import pdb
@@ -55,3 +55,6 @@ class Return(object):
     def transform(self, X):
         shifted = X['Adjusted Close'].shift(-self.period) #  Shift by number of days to predict
         return shifted/X['Adjusted Close'] - 1
+
+
+

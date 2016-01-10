@@ -213,25 +213,34 @@ class Stock(object):
         ######################
         # Average True Range #
         ######################
-
         # pdb.set_trace()
-        TR1 = data['High'] - data['Low']
-        TR2 = (data['High'] - data['Adjusted Close'].shift(1)).apply(np.abs)
-        TR3 = (data['Low'] - data['Adjusted Close'].shift(1)).apply(np.abs)
-        TR = pd.concat(
-            [TR1.apply(np.abs), TR2.apply(np.abs), TR3.apply(np.abs)],
-            axis=1).max(1)
-        _ATR = pd.rolling_mean(TR, window=14)
-        ATR = (TR + _ATR.shift(1)*13)/14
-        df = pd.concat([ATR, _ATR], axis=1)
-        ATR = df.apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], axis=1)
-        data['ATR'] = ATR
+        data['ATR'] = ATR(data, 14)
 
         ##################
         # Bollinger band #
         ##################
         data = self.bollinger10(data)
         # data = self.bollinger5(data)
+
+        #################
+        # Rolling stats #
+        #################
+        data = high(22, data)  # Chandelier
+        data = low(22, data)  # Chandelier
+
+        # Ichimoku Clouds
+        # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:ichimoku_cloud
+        data['tenkansen9'] = sen(data, 9)
+        data['kijunsen26'] = sen(data, 26)
+        data['senkouA'] = (data['tenkansen9'] + data['kijunsen26']) / 2.
+        data['senkouB52'] = sen(data, 52)
+        data['chikou26'] = data['Adjusted Close'].shift(26)
+
+        # Moving Average
+        # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_averages
+        data['ema10'] = ema(data, 10)
+        data['kama'] = kama(data)
+        data['ret_over2'] = return_over(data, 2)
 
         # This is to make sure that both index are aligned.
         # If the start_date and end_date don't play well with the features
@@ -262,6 +271,71 @@ def train_test_split(start_date, end_date, numerator=4, denominator=5):
 
     return datetime.datetime.strftime(mid, date_format)
 
+
+def ATR(data, periods=14):
+    TR1 = data['High'] - data['Low']
+    TR2 = (data['High'] - data['Adjusted Close'].shift(1)).apply(np.abs)
+    TR3 = (data['Low'] - data['Adjusted Close'].shift(1)).apply(np.abs)
+    TR = pd.concat(
+        [TR1.apply(np.abs), TR2.apply(np.abs), TR3.apply(np.abs)],
+        axis=1).max(1)
+    _atr = pd.rolling_mean(TR, window=periods)
+    atr = (TR + _atr.shift(1)*(periods-1))/periods
+    df = pd.concat([atr, _atr], axis=1)
+    atr = df.apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], axis=1)
+    return atr
+
+
+def high(window, data):
+    data['r_high{}'.format(window)] = pd.rolling_max(
+        data['Adjusted Close'], window=window)
+    return data
+
+
+def low(window, data):
+    data['r_low{}'.format(window)] = pd.rolling_min(
+        data['Adjusted Close'], window=window)
+    return data
+
+
+def sen(data, periods=9):
+    t = pd.rolling_max(
+        data['Adjusted Close'], window=periods)
+    t += pd.rolling_min(
+        data['Adjusted Close'], window=periods)
+    t /= 2.
+    return t
+
+
+def ema(data, periods=10):
+    mult = (2./(periods+1))
+    _ema = pd.rolling_mean(data['Adjusted Close'], periods).shift(1)
+    ema = data['Adjusted Close'] - _ema * mult - _ema
+    df = pd.concat([ema, _ema], axis=1)
+    ema = df.apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], axis=1)
+    return ema
+
+
+def return_over(data, over=2):
+    return data['Adjusted Close'] - data['Adjusted Close'].shift(over)
+
+
+def kama(data):
+    # pdb.set_trace()
+    er = efficiency_ratio(data)
+    sc = (er * (2./(2+1) - 2./(30+1)) + 2./(30+1))**2
+    rm = pd.rolling_mean(
+            data['Adjusted Close'], window=10).shift(1)
+
+    # KAMA = Prior KAMA + SC * (Price - Prior KAMA)
+    return sc + rm * (data['Adjusted Close'] - rm)
+
+
+def efficiency_ratio(data):
+    change = return_over(data, 10).apply(np.abs)
+    volatility = pd.rolling_sum(return_over(data, 1).apply(np.abs), window=10)
+    return change/volatility
+#{Close - EMA(previous day)} x multiplier + EMA(previous day)
 
 # def buffer(start, end, before=15, after=15):
 #     """Creating a buffer before and after the start and end date.
