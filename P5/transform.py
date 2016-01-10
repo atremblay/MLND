@@ -3,18 +3,10 @@
 # @Author: alexis
 # @Date:   2016-01-03 14:04:55
 # @Last Modified by:   alexis
-# @Last Modified time: 2016-01-10 08:51:30
+# @Last Modified time: 2016-01-10 13:47:53
 
 import pandas as pd
 import pdb
-
-
-class SPIndex(object):
-    """docstring for SPIndex"""
-    def __init__(self, stock, stard_date, end_date):
-        super(SPIndex, self).__init__()
-        self.arg = arg
-
 
 
 class MaxRescale(object):
@@ -25,9 +17,9 @@ class MaxRescale(object):
         super(MaxRescale, self).__init__()
         self.columns = columns
 
-    def fit(self, X):
+    def fit(self, X, start_date, end_date):
         # pdb.set_trace()
-        self.max = X[self.columns].max()
+        self.max = X.ix[start_date:end_date, self.columns].max()
         return self
 
     def transform(self, X):
@@ -45,8 +37,10 @@ class BollingerBand(object):
         self.window = window
 
     def __call__(self, X):
-        X['r_mean'] = pd.rolling_mean(X['Adjusted Close'], window=self.window)
-        X['r_std'] = pd.rolling_std(X['Adjusted Close'], window=self.window)
+        X['r_mean{}'.format(self.window)] = pd.rolling_mean(
+            X['Adjusted Close'], window=self.window)
+        X['r_std{}'.format(self.window)] = pd.rolling_std(
+            X['Adjusted Close'], window=self.window)
         # Back fill the NaN we got by doing the rolling window
         X.fillna(method='bfill', inplace=True)
         return X
