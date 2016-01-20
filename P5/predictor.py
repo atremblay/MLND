@@ -8,6 +8,8 @@ from sklearn.svm import SVR
 from sklearn.grid_search import ParameterGrid
 from sklearn.metrics import mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.decomposition import PCA
+from sklearn.ensemble import AdaBoostRegressor
 from stockAPI import QuandlAPI
 import datetime
 import pdb
@@ -44,6 +46,7 @@ class SVRPredictor(object):
         self.periods = periods
         self.stocks = dict()
         self.models = dict()
+        self.pca = PCA()
 
     def fit(self, start_date, end_date):
 
@@ -61,19 +64,23 @@ class SVRPredictor(object):
         mid_date = train_test_split(start_date, end_date)
         for ticker, stock in self.stocks.items():
 
-            # pdb.set_trace()
             X_train, y_train = stock.get_data(start_date, mid_date, fit=True)
-            print(X_train.head())
+            # X_train = self.pca.fit_transform(X_train.values)
+            X_train = X_train.values
+            # pdb.set_trace()
             X_cv, y_cv = stock.get_data(mid_date, end_date)
+            # X_cv = self.pca.transform(X_cv.values)
+            X_cv = X_cv.values
 
             lowest_mse = np.inf
             for i, param in enumerate(params):
                 svr = SVR(**param)
-
-                svr.fit(X_train.values, y_train.values)
-                mse = mean_squared_error(y_cv, svr.predict(X_cv.values))
+                ada = AdaBoostRegressor(svr)
+                ada.fit(X_train, y_train.values)
+                mse = mean_squared_error(
+                    y_cv, ada.predict(X_cv))
                 if mse <= lowest_mse:
-                    self.models[ticker] = svr
+                    self.models[ticker] = ada
 
         return self
 
@@ -85,9 +92,11 @@ class SVRPredictor(object):
             # pdb.set_trace()
             stock = self.stocks[ticker]
             data, label = stock.get_data(start_date, end_date)
+            # data = self.pca.transform(data.values)
+            data = data.values
             model = self.models[ticker]
             y_pred = Series(
-                model.predict(data.values),
+                model.predict(data),
                 index=label.index)
             predictions[ticker] = [y_pred, label]
 
@@ -118,17 +127,16 @@ class KNNPredictor(object):
 
             # pdb.set_trace()
             X_train, y_train = stock.get_data(start_date, mid_date, fit=True)
-            print(X_train.head())
             X_cv, y_cv = stock.get_data(mid_date, end_date)
 
             lowest_mse = np.inf
             for i, param in enumerate(params):
-                svr = KNeighborsRegressor(**param)
-
-                svr.fit(X_train.values, y_train.values)
-                mse = mean_squared_error(y_cv, svr.predict(X_cv.values))
+                knn = KNeighborsRegressor(**param)
+                ada = AdaBoostRegressor(knn)
+                ada.fit(X_train.values, y_train.values)
+                mse = mean_squared_error(y_cv, ada.predict(X_cv.values))
                 if mse <= lowest_mse:
-                    self.models[ticker] = svr
+                    self.models[ticker] = ada
 
         return self
 
@@ -163,8 +171,8 @@ class Stock(object):
 
     def get_data(self, start_date, end_date, fit=False, cache=True):
 
-        d_file_name = "d{}_{}.csv".format(start_date, end_date)
-        l_file_name = "l{}_{}.csv".format(start_date, end_date)
+        d_file_name = "d{}_{}_{}.csv".format(start_date, end_date, self.ticker)
+        l_file_name = "l{}_{}_{}.csv".format(start_date, end_date, self.ticker)
 
         if cache and os.path.exists(d_file_name) and os.path.exists(l_file_name):
             data = pd.read_csv(d_file_name, index_col=0, parse_dates='Date')
@@ -175,7 +183,7 @@ class Stock(object):
                 squeeze=True,
                 header=None)
         else:
-            data = QuandlAPI.get_data(self.ticker, start_date, end_date, 75, 15)
+            data = QuandlAPI.get_data(self.ticker, start_date, end_date, 160, 15)
             label = Return(self.over).transform(data)
 
             #######################
@@ -232,15 +240,28 @@ class Stock(object):
         # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:ichimoku_cloud
         data['tenkansen9'] = sen(data, 9)
         data['kijunsen26'] = sen(data, 26)
-        data['senkouA'] = (data['tenkansen9'] + data['kijunsen26']) / 2.
+        data['senkouA'] = (data['tenkansen9'] + data['kijunsen26']) / 2. # Not sure if redondant. Affine transformation of two other features
         data['senkouB52'] = sen(data, 52)
         data['chikou26'] = data['Adjusted Close'].shift(26)
 
         # Moving Average
         # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:moving_averages
         data['ema10'] = ema(data, 10)
+        data['ema10-100'] = ema(data, 10) / ema(data, 100)
+        data['ema25-100'] = ema(data, 25) / ema(data, 100)
+        data['ema50-100'] = ema(data, 50) / ema(data, 100)
         data['kama'] = kama(data)
         data['ret_over2'] = return_over(data, 2)
+
+        # RSI
+        # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:relative_strength_index_rsi
+        data['rsi'] = rsi(data)
+
+        # Price Volume Oscillator
+        # http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:percentage_volume_oscillator_pvo
+        ema_vol10 = ema(data, 10, 'Volume')
+        ema_vol26 = ema(data, 26, 'Volume')
+        data['pvo'] = (ema_vol10-ema_vol26)/ema_vol10
 
         # This is to make sure that both index are aligned.
         # If the start_date and end_date don't play well with the features
@@ -307,12 +328,13 @@ def sen(data, periods=9):
     return t
 
 
-def ema(data, periods=10):
-    mult = (2./(periods+1))
-    _ema = pd.rolling_mean(data['Adjusted Close'], periods).shift(1)
-    ema = data['Adjusted Close'] - _ema * mult - _ema
-    df = pd.concat([ema, _ema], axis=1)
-    ema = df.apply(lambda x: x[0] if not np.isnan(x[0]) else x[1], axis=1)
+def ema(data, periods=10, column='Adjusted Close'):
+    # pdb.set_trace()
+    mult = 2./(periods+1)
+    roll_mean = pd.rolling_mean(data[column], periods)
+    _ema = roll_mean.shift(1)
+    ema = (data[column] - _ema) * mult + _ema
+    ema.ix[periods-1] = roll_mean.ix[periods-1]
     return ema
 
 
@@ -335,7 +357,20 @@ def efficiency_ratio(data):
     change = return_over(data, 10).apply(np.abs)
     volatility = pd.rolling_sum(return_over(data, 1).apply(np.abs), window=10)
     return change/volatility
-#{Close - EMA(previous day)} x multiplier + EMA(previous day)
+
+def rsi(data, periods=14):
+    # pdb.set_trace()
+    change = data['Adjusted Close'] - data['Adjusted Close'].shift(1)
+    gains = change.apply(lambda x: 0 if x < 0 else x)
+    losses = change.apply(lambda x: 0 if x >= 0 else -x)
+    fag = pd.rolling_sum(gains, periods)
+    fal = pd.rolling_sum(losses, periods)
+    ag = (fag.shift(1) * (periods-1) + gains)/periods
+    al = (fal.shift(1) * (periods-1) + losses)/periods
+    rs = ag / al
+
+    return 1 - 1/(1+rs)
+
 
 # def buffer(start, end, before=15, after=15):
 #     """Creating a buffer before and after the start and end date.
