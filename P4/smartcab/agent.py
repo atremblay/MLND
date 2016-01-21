@@ -3,6 +3,7 @@ from planner import RoutePlanner
 from simulator import Simulator
 import random
 import math
+import numpy as np
 
 
 class QTable(object):
@@ -68,23 +69,23 @@ class QState(object):
 
 class State(object):
     """docstring for State"""
-    def __init__(self, next_waypoint, light, oncoming, left, right, deadline):
+    def __init__(self, next_waypoint, light, oncoming, right, left, deadline):
         super(State, self).__init__()
         self.next_waypoint = next_waypoint
         self.light = light
         self.oncoming = oncoming
-        self.left = left
         self.right = right
-        self.deadline = deadline
+        self.left = None
+        self.deadline = None
 
     def __repr__(self):
-        string = "State: next_waypoint = {}, light = {}, oncoming = {}, left = {}, right = {}, deadline = {}"
+        string = "State: next_waypoint = {}, light = {}, oncoming = {}, right = {}, left = {}, deadline = {}"
         string = string.format(
             self.next_waypoint,
             self.light,
             self.oncoming,
-            self.left,
             self.right,
+            self.left,
             self.deadline)
         return string
 
@@ -95,8 +96,8 @@ class State(object):
         equal &= self.next_waypoint == other.next_waypoint
         equal &= self.light == other.light
         equal &= self.oncoming == other.oncoming
-        equal &= self.left == other.left
         equal &= self.right == other.right
+        equal &= self.left == other.left
         equal &= self.deadline == other.deadline
         return equal
 
@@ -128,14 +129,34 @@ class LearningAgent(Agent):
         self.gamma = 0.8
         self.qtable = QTable()
 
+        self.rewards = []
+        self.moves = 0.
+        self.bad_moves = 0.
+        self.completed = []
+        self.runs = 0
+
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
+        try:
+            self.rewards.append(self.bad_moves/(self.moves))
+        except:
+            self.rewards.append(0)
+
+        # import pdb
+        # pdb.set_trace()
+        if self.runs != len(self.completed):
+            self.completed.append(0)
+        self.runs += 1
+
+        print(self.rewards)
+        print(self.completed)
 
     def update(self, t):
         # Gather inputs
         self.next_waypoint = self.planner.next_waypoint()  # from route planner, also displayed by simulator
         inputs = self.env.sense(self)
+
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
@@ -156,12 +177,21 @@ class LearningAgent(Agent):
 
         # Execute action and get reward
         reward = self.env.act(self, action.action)
+        if reward < 0:
+            self.bad_moves += 1
+        self.moves += 1
+
+        if self.env.done:
+            self.completed.append(1)
+
 
         # TODO: Learn policy based on state, action, reward
+        new_inputs = self.env.sense(self)
+
         state_prime = State(
             self.planner.next_waypoint(),
             deadline=deadline,
-            **self.env.sense(self)
+            **new_inputs
             )
         qstate_prime = self.qtable[state_prime]
         self.state = state_prime
@@ -185,7 +215,7 @@ def run():
 
     # Now simulate it
     sim = Simulator(e, update_delay=0.0001)  # reduce update_delay to speed up simulation
-    sim.run(n_trials=100)  # press Esc or close pygame window to quit
+    sim.run(n_trials=1000)  # press Esc or close pygame window to quit
 
 
 if __name__ == '__main__':
