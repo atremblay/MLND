@@ -147,8 +147,6 @@ class LearningAgent(Agent):
         except:
             self.rewards.append(0)
 
-        # import pdb
-        # pdb.set_trace()
         if self.runs != len(self.completed):
             self.completed.append(0)
         self.runs += 1
@@ -168,7 +166,6 @@ class LearningAgent(Agent):
         self.qtable[state].visited += 1
         qstate = self.qtable[state]
 
-        # print qstate
 
         # TODO: Select action according to your policy
         #  Boltzmann exploration
@@ -181,30 +178,12 @@ class LearningAgent(Agent):
         probabilities = numerators / denom
 
         dist = probabilities.cumsum()
-        # import pdb
-        # pdb.set_trace()
+
         rnd = random.random()
         for i, edge in enumerate(dist):
             if rnd < edge:
                 action = actions[i]
                 break
-
-
-
-        # max_value_action = max(qstate)
-        # num = math.exp(max_value_action.value/T)
-        # denom = sum([math.exp(action.value/T) for action in actions])
-
-        # pr_a_s = num/denom
-        # # import pdb
-        # # pdb.set_trace()
-
-
-        # if random.random() > pr_a_s:
-        # # if random.random() <= epsilon:
-        #     action = qstate.random()
-        # else:
-        #     action = max(qstate)
 
         # Execute action and get reward
         reward = self.env.act(self, action.action)
@@ -235,9 +214,6 @@ class LearningAgent(Agent):
         import pdb
 
         new_value = (1-alpha)*qsa + alpha*(reward + self.gamma*qsa_prime)
-        # if reward < 0:
-        #     if self.qtable[state][action.action].value < new_value:
-        #         pdb.set_trace()
 
         self.qtable[state][action.action] = new_value
         print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}, next_waypoint = {}".format(deadline, inputs, action, reward, self.next_waypoint)  # [debug]
