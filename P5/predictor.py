@@ -75,7 +75,72 @@ class SVRPredictor(object):
             lowest_mse = np.inf
             for i, param in enumerate(params):
                 svr = SVR(**param)
-                ada = AdaBoostRegressor(svr)
+                # ada = AdaBoostRegressor(svr)
+                svr.fit(X_train, y_train.values)
+                mse = mean_squared_error(
+                    y_cv, svr.predict(X_cv))
+                if mse <= lowest_mse:
+                    self.models[ticker] = svr
+
+        return self
+
+    def transform(self, tickers, start_date, end_date):
+        assert self.tickers.issubset(set(tickers))
+
+        predictions = {}
+        for ticker in tickers:
+            # pdb.set_trace()
+            stock = self.stocks[ticker]
+            data, label = stock.get_data(start_date, end_date)
+            # data = self.pca.transform(data.values)
+            data = data.values
+            model = self.models[ticker]
+            y_pred = Series(
+                model.predict(data),
+                index=label.index)
+            predictions[ticker] = [y_pred, label]
+
+        return predictions
+
+
+class AdaBoostPredictor(object):
+    """docstring for AdaBoostPredictor"""
+    def __init__(self, tickers, periods):
+        super(AdaBoostPredictor, self).__init__()
+        self.tickers = set(tickers)
+        self.periods = periods
+        self.stocks = dict()
+        self.models = dict()
+        self.pca = PCA()
+
+    def fit(self, start_date, end_date):
+
+        for ticker in self.tickers:
+            self.stocks[ticker] = Stock(ticker)
+
+        params_ada = [{
+            'n_estimators': [25, 50, 100],
+            'learning_rate': [0.01, 0.1, 1, 10],
+            'loss': ['linear', 'square', 'exponential']
+            }]
+
+        params = ParameterGrid(params_ada)
+
+        # Find the split for training and CV
+        mid_date = train_test_split(start_date, end_date)
+        for ticker, stock in self.stocks.items():
+
+            X_train, y_train = stock.get_data(start_date, mid_date, fit=True)
+            # X_train = self.pca.fit_transform(X_train.values)
+            X_train = X_train.values
+            # pdb.set_trace()
+            X_cv, y_cv = stock.get_data(mid_date, end_date)
+            # X_cv = self.pca.transform(X_cv.values)
+            X_cv = X_cv.values
+
+            lowest_mse = np.inf
+            for i, param in enumerate(params):
+                ada = AdaBoostRegressor(**param)
                 ada.fit(X_train, y_train.values)
                 mse = mean_squared_error(
                     y_cv, ada.predict(X_cv))
@@ -132,11 +197,11 @@ class KNNPredictor(object):
             lowest_mse = np.inf
             for i, param in enumerate(params):
                 knn = KNeighborsRegressor(**param)
-                ada = AdaBoostRegressor(knn)
-                ada.fit(X_train.values, y_train.values)
-                mse = mean_squared_error(y_cv, ada.predict(X_cv.values))
+                # ada = AdaBoostRegressor(knn)
+                knn.fit(X_train.values, y_train.values)
+                mse = mean_squared_error(y_cv, knn.predict(X_cv.values))
                 if mse <= lowest_mse:
-                    self.models[ticker] = ada
+                    self.models[ticker] = knn
 
         return self
 
@@ -193,6 +258,12 @@ class Stock(object):
                 "INDEX_GSPC", start_date, end_date, 75, 15)
             data = data.join(sp500['Adj Close'], how='left')
             data.rename(columns={'Adj Close': 'SP Close'}, inplace=True)
+
+            # Deal with outliers
+            desc = data.describe()
+            iqr = desc.ix['75%'] - desc.ix['25%']
+            data = data[data <= desc.ix['50%'] + 1.5*iqr]
+            data = data[data >= desc.ix['50%'] - 1.5*iqr]
 
             # Cache the raw data
             if cache:
